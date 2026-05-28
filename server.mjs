@@ -12,11 +12,11 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(compression());
 app.use(express.json());
-app.use(express.static(join(__dirname, "dist/public")));
+app.use(express.static(join(__dirname, "dist/client")));
 
 // Serve the app
 app.get("*", (req, res) => {
-  const indexPath = join(__dirname, "dist/public/index.html");
+  const indexPath = join(__dirname, "dist/client/index.html");
   res.sendFile(indexPath, (err) => {
     if (err) {
       res.status(500).send("Internal Server Error");

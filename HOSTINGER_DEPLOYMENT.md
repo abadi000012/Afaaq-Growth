@@ -25,7 +25,7 @@ npm run build
 
 This creates:
 - `dist/` - Built files
-- `dist/public/` - Static assets
+- `dist/client/` - Static assets
 
 ### 3. Upload to Hostinger
 
