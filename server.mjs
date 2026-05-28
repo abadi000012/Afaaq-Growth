@@ -8,20 +8,73 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const clientDir = join(__dirname, "dist/client");
+const serverEntry = import("./dist/server/server.js");
 
 // Middleware
+app.set("trust proxy", true);
 app.use(compression());
-app.use(express.json());
-app.use(express.static(join(__dirname, "dist/client")));
+app.use(express.static(clientDir, { index: false }));
 
-// Serve the app
-app.get("*", (req, res) => {
-  const indexPath = join(__dirname, "dist/client/index.html");
-  res.sendFile(indexPath, (err) => {
-    if (err) {
-      res.status(500).send("Internal Server Error");
+function createWebRequest(req) {
+  const host = req.get("host") ?? `localhost:${PORT}`;
+  const protocol = req.protocol;
+  const url = new URL(req.originalUrl, `${protocol}://${host}`);
+  const headers = new Headers();
+
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(key, item);
+    } else if (value !== undefined) {
+      headers.set(key, value);
+    }
+  }
+
+  const init = {
+    method: req.method,
+    headers,
+  };
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    init.body = req;
+    init.duplex = "half";
+  }
+
+  return new Request(url, init);
+}
+
+async function sendWebResponse(res, response) {
+  res.status(response.status);
+
+  if (typeof response.headers.getSetCookie === "function") {
+    const setCookie = response.headers.getSetCookie();
+    if (setCookie.length > 0) res.setHeader("set-cookie", setCookie);
+  }
+
+  response.headers.forEach((value, key) => {
+    if (key.toLowerCase() !== "set-cookie") {
+      res.setHeader(key, value);
     }
   });
+
+  if (response.body == null) {
+    res.end();
+    return;
+  }
+
+  const body = Buffer.from(await response.arrayBuffer());
+  res.send(body);
+}
+
+// Serve TanStack Start SSR routes.
+app.all("*", async (req, res, next) => {
+  try {
+    const entry = await serverEntry;
+    const response = await entry.default.fetch(createWebRequest(req), process.env, {});
+    await sendWebResponse(res, response);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Error handling
